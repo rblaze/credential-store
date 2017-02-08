@@ -10,3 +10,6 @@ getCredential name = undefined
 
 putCredential :: String -> Credential -> IO ()
 putCredential name value = undefined
+
+deleteCredential :: String -> IO ()
+deleteCredential name = undefined
