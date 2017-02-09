@@ -1,3 +1,4 @@
+{-# Language ForeignFunctionInterface #-}
 module System.CredentialStore.Windows
     ( CredentialStore
     , getCredential
@@ -7,8 +8,12 @@ module System.CredentialStore.Windows
     ) where
 
 import System.CredentialStore.Types
+import System.CredentialStore.WinTypes
 
 data CredentialStore = CredentialStore
+
+targetNamePrefix :: String
+targetNamePrefix = "PrivateCloud_"
 
 withCredentialStore :: (CredentialStore -> IO a) -> IO a
 withCredentialStore f = f CredentialStore
