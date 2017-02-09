@@ -1,16 +1,23 @@
 module System.CredentialStore.Windows
-    ( getCredential
+    ( CredentialStore
+    , getCredential
     , putCredential
     , deleteCredential
+    , withCredentialStore
     ) where
 
 import System.CredentialStore.Types
 
-getCredential :: String -> IO (Maybe Credential)
-getCredential name = undefined
+data CredentialStore = CredentialStore
 
-putCredential :: String -> Credential -> IO ()
-putCredential name value = undefined
+withCredentialStore :: (CredentialStore -> IO a) -> IO a
+withCredentialStore f = f CredentialStore
 
-deleteCredential :: String -> IO ()
-deleteCredential name = undefined
+getCredential :: CredentialStore -> String -> IO (Maybe Credential)
+getCredential _ name = undefined
+
+putCredential :: CredentialStore -> Bool -> String -> Credential -> IO ()
+putCredential _ replace name value = undefined
+
+deleteCredential :: CredentialStore -> String -> IO ()
+deleteCredential _ name = undefined

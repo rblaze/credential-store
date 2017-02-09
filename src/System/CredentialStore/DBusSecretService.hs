@@ -102,7 +102,7 @@ getCredential store@CredentialStore{..} name = do
                 [ obj ] | Just (_ :: ObjectPath, _ :: BS.ByteString, cred, _ :: String) <- fromVariant obj -> return $ Just cred
                 body -> throw $ clientError $ "invalid GetSecret response" ++ show body
 
-putCredential :: CredentialStore -> Bool -> String -> Credential -> IO ObjectPath
+putCredential :: CredentialStore -> Bool -> String -> Credential -> IO ()
 putCredential CredentialStore{..} replace name value = do
     reply <- call_ csClient $
         (serviceCall defaultCollection collectionInterface createItem)
@@ -123,7 +123,7 @@ putCredential CredentialStore{..} replace name value = do
         }
     case methodReturnBody reply of
         [ path, _ ] | Just p <- fromVariant path, p == noObject -> throw $ clientError "prompt required"
-                    | Just p <- fromVariant path -> return p
+                    | Just _ <- fromVariant path -> return ()
         body -> throw $ clientError $ "invalid CreateItem response" ++ show body
 
 deleteCredential :: CredentialStore -> String -> IO ()

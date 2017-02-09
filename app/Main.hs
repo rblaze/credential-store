@@ -7,8 +7,7 @@ import System.CredentialStore
 main :: IO ()
 main = do
     withCredentialStore $ \store -> do
-        objid <- putCredential store True "foo" (BS8.pack "burr")
-        print objid
+        putCredential store True "foo" (BS8.pack "burr")
         v <- getCredential store "foo"
         print v
         deleteCredential store "foo"
