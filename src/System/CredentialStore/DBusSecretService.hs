@@ -1,4 +1,4 @@
-{-# Language PatternGuards, RecordWildCards #-}
+{-# Language PatternGuards, RecordWildCards, ScopedTypeVariables #-}
 module System.CredentialStore.DBusSecretService
     ( CredentialStore
     , getCredential
@@ -32,8 +32,11 @@ servicePath = objectPath_ "/org/freedesktop/secrets"
 serviceInterface :: InterfaceName
 serviceInterface = interfaceName_ "org.freedesktop.Secret.Service"
 
-serviceOpenSession :: MemberName
-serviceOpenSession = memberName_ "OpenSession"
+openSession :: MemberName
+openSession = memberName_ "OpenSession"
+
+unlock :: MemberName
+unlock = memberName_ "Unlock"
 
 defaultCollection :: ObjectPath
 defaultCollection = objectPath_ "/org/freedesktop/secrets/aliases/default"
@@ -44,16 +47,27 @@ collectionInterface = interfaceName_ "org.freedesktop.Secret.Collection"
 createItem :: MemberName
 createItem = memberName_ "CreateItem"
 
+searchItems :: MemberName
+searchItems = memberName_ "SearchItems"
+
+itemInterface :: InterfaceName
+itemInterface = interfaceName_ "org.freedesktop.Secret.Item"
+
+getSecret :: MemberName
+getSecret = memberName_ "GetSecret"
+
+serviceCall :: ObjectPath -> InterfaceName -> MemberName -> MethodCall
+serviceCall o i m = (methodCall o i m) { methodCallDestination = Just destination }
+
 withCredentialStore :: (CredentialStore -> IO a) -> IO a
 withCredentialStore = bracket openStore closeStore
     where
     openStore =
         bracketOnError connectSession disconnect $ \client -> do
             reply <- call_ client $
-                (methodCall servicePath serviceInterface serviceOpenSession)
+                (serviceCall servicePath serviceInterface openSession)
                 { methodCallBody = [ toVariant "plain", toVariant $ toVariant "" ]
                 , methodCallAutoStart = True
-                , methodCallDestination = Just destination
                 }
             case methodReturnBody reply of
                 [_, objectPathVar] | Just v <- fromVariant objectPathVar ->
@@ -66,14 +80,34 @@ withCredentialStore = bracket openStore closeStore
     closeStore = disconnect . csClient
 
 getCredential :: CredentialStore -> String -> IO (Maybe Credential)
-getCredential store name = undefined
+getCredential CredentialStore{..} name = do
+    searchReply <- call_ csClient $
+        (serviceCall defaultCollection collectionInterface searchItems)
+            { methodCallBody = [ toVariant $ M.singleton "credentialName" name ] }
+    items <- case methodReturnBody searchReply of
+        [ items ]  -> return items
+        body -> throw $ clientError $ "invalid SearchItems response" ++ show body
+    unlockReply <- call_ csClient $
+        (serviceCall servicePath serviceInterface unlock)
+            { methodCallBody = [ items ] }
+    unlocked <- case methodReturnBody unlockReply of
+        [ unlocked, _ ] | Just objs <- fromVariant unlocked -> return objs
+        body -> throw $ clientError $ "invalid Unlock response" ++ show body
+    case unlocked of
+        [] -> return Nothing
+        (objpath : _) -> do
+            getReply <- call_ csClient $
+                (serviceCall objpath itemInterface getSecret)
+                    { methodCallBody = [ toVariant csSession ] }
+            case methodReturnBody getReply of
+                [ obj ] | Just (_ :: ObjectPath, _ :: BS.ByteString, cred, _ :: String) <- fromVariant obj -> return $ Just cred
+                body -> throw $ clientError $ "invalid GetSecret response" ++ show body
 
 putCredential :: CredentialStore -> Bool -> String -> Credential -> IO ObjectPath
 putCredential CredentialStore{..} replace name value = do
     reply <- call_ csClient $
-        (methodCall defaultCollection collectionInterface createItem)
-        { methodCallDestination = Just destination
-        , methodCallBody =
+        (serviceCall defaultCollection collectionInterface createItem)
+        { methodCallBody =
             [ toVariant $ M.fromList
                 [ ("org.freedesktop.Secret.Item.Label", toVariant $ name)
                 , ("org.freedesktop.Secret.Item.Attributes",
