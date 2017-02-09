@@ -122,8 +122,7 @@ putCredential CredentialStore{..} replace name value = do
             ]
         }
     case methodReturnBody reply of
-        [ path, _ ] | Just p <- fromVariant path, p == noObject -> throw $ clientError "prompt required"
-                    | Just _ <- fromVariant path -> return ()
+        [ path, _ ] | Just p <- fromVariant path -> when (p == noObject) $ throw (clientError "prompt required")
         body -> throw $ clientError $ "invalid CreateItem response" ++ show body
 
 deleteCredential :: CredentialStore -> String -> IO ()
