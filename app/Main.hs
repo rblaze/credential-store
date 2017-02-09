@@ -11,3 +11,6 @@ main = do
         print objid
         v <- getCredential store "foo"
         print v
+        deleteCredential store "foo"
+        v' <- getCredential store "foo"
+        print v'

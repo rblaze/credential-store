@@ -8,6 +8,7 @@ module System.CredentialStore.DBusSecretService
     ) where
 
 import Control.Exception.Safe
+import Control.Monad
 import DBus
 import DBus.Client
 import qualified Data.ByteString as BS
@@ -56,6 +57,9 @@ itemInterface = interfaceName_ "org.freedesktop.Secret.Item"
 getSecret :: MemberName
 getSecret = memberName_ "GetSecret"
 
+delete :: MemberName
+delete = memberName_ "Delete"
+
 serviceCall :: ObjectPath -> InterfaceName -> MemberName -> MethodCall
 serviceCall o i m = (methodCall o i m) { methodCallDestination = Just destination }
 
@@ -80,16 +84,11 @@ withCredentialStore = bracket openStore closeStore
     closeStore = disconnect . csClient
 
 getCredential :: CredentialStore -> String -> IO (Maybe Credential)
-getCredential CredentialStore{..} name = do
-    searchReply <- call_ csClient $
-        (serviceCall defaultCollection collectionInterface searchItems)
-            { methodCallBody = [ toVariant $ M.singleton "credentialName" name ] }
-    items <- case methodReturnBody searchReply of
-        [ items ]  -> return items
-        body -> throw $ clientError $ "invalid SearchItems response" ++ show body
+getCredential store@CredentialStore{..} name = do
+    items <- findCredentials store name
     unlockReply <- call_ csClient $
         (serviceCall servicePath serviceInterface unlock)
-            { methodCallBody = [ items ] }
+            { methodCallBody = [ toVariant items ] }
     unlocked <- case methodReturnBody unlockReply of
         [ unlocked, _ ] | Just objs <- fromVariant unlocked -> return objs
         body -> throw $ clientError $ "invalid Unlock response" ++ show body
@@ -128,4 +127,16 @@ putCredential CredentialStore{..} replace name value = do
         body -> throw $ clientError $ "invalid CreateItem response" ++ show body
 
 deleteCredential :: CredentialStore -> String -> IO ()
-deleteCredential store name = undefined
+deleteCredential store@CredentialStore{..} name = do
+    items <- findCredentials store name
+    forM_ items $ \objpath -> do
+        call_ csClient $ serviceCall objpath itemInterface delete
+
+findCredentials :: CredentialStore -> String -> IO [ObjectPath]
+findCredentials CredentialStore{..} name = do
+    searchReply <- call_ csClient $
+        (serviceCall defaultCollection collectionInterface searchItems)
+            { methodCallBody = [ toVariant $ M.singleton "credentialName" name ] }
+    case methodReturnBody searchReply of
+        [ v ] | Just items <- fromVariant v -> return items
+        body -> throw $ clientError $ "invalid SearchItems response" ++ show body
