@@ -1,4 +1,3 @@
-{-# Language ForeignFunctionInterface #-}
 module System.CredentialStore.Windows
     ( CredentialStore
     , getCredential

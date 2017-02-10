@@ -108,7 +108,7 @@ putCredential CredentialStore{..} replace name value = do
         (serviceCall defaultCollection collectionInterface createItem)
         { methodCallBody =
             [ toVariant $ M.fromList
-                [ ("org.freedesktop.Secret.Item.Label", toVariant $ name)
+                [ ("org.freedesktop.Secret.Item.Label", toVariant name)
                 , ("org.freedesktop.Secret.Item.Attributes",
                     toVariant $ M.singleton "credentialName" name)
                 ]
@@ -128,7 +128,7 @@ putCredential CredentialStore{..} replace name value = do
 deleteCredential :: CredentialStore -> String -> IO ()
 deleteCredential store@CredentialStore{..} name = do
     items <- findCredentials store name
-    forM_ items $ \objpath -> do
+    forM_ items $ \objpath ->
         call_ csClient $ serviceCall objpath itemInterface delete
 
 findCredentials :: CredentialStore -> String -> IO [ObjectPath]
