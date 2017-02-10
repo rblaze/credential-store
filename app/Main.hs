@@ -10,8 +10,6 @@ main = do
         putCredential store True "foo" (BS8.pack "burr")
         v <- getCredential store "foo"
         print v
-        v <- getCredential store "it:https://github.com"
-        print v
---        deleteCredential store "foo"
---        v' <- getCredential store "foo"
---        print v'
+        deleteCredential store "foo"
+        v' <- getCredential store "foo"
+        print v'

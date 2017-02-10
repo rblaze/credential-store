@@ -91,4 +91,6 @@ foreign import ccall unsafe "CredReadW" c_CredRead :: LPCTSTR -> DWORD -> DWORD 
 
 foreign import ccall unsafe "CredWriteW" c_CredWrite :: Ptr CREDENTIAL -> DWORD -> IO BOOL
 
+foreign import ccall unsafe "CredDeleteW" c_CredDelete :: LPCTSTR -> DWORD -> DWORD -> IO BOOL
+
 foreign import ccall unsafe "CredFree" c_CredFree :: Ptr CREDENTIAL -> IO ()

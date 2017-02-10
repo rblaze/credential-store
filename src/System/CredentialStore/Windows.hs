@@ -42,7 +42,7 @@ getCredential _ name =
                 return Nothing
 
 putCredential :: CredentialStore -> Bool -> String -> Credential -> IO ()
-putCredential _ replace name value =
+putCredential _ _ name value =
     withTString name $ \tstr ->
     withTString "" $ \emptystr ->
     BS.useAsCStringLen value $ \(val, len) ->
@@ -64,4 +64,4 @@ putCredential _ replace name value =
         failIfFalse_ "CredWrite" $ c_CredWrite rec 0
 
 deleteCredential :: CredentialStore -> String -> IO ()
-deleteCredential _ name = undefined
+deleteCredential _ name = withTString name $ \tstr -> failIfFalse_ "CredDelete" $ c_CredDelete tstr cRED_TYPE_GENERIC 0
