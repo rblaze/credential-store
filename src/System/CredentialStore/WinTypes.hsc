@@ -81,9 +81,14 @@ instance Storable CREDENTIAL where
 cRED_TYPE_GENERIC :: DWORD
 cRED_TYPE_GENERIC = 1
 
-foreign import ccall unsafe "CredReadW" c_CredRead :: LPCTSTR -> DWORD -> DWORD -> Ptr (Ptr CREDENTIAL) -> IO BOOL
-
-foreign import ccall unsafe "CredFree" c_CredFree :: Ptr CREDENTIAL -> IO ()
+cRED_PERSIST_LOCAL_MACHINE :: DWORD
+cRED_PERSIST_LOCAL_MACHINE = 2
 
 eRROR_NOT_FOUND :: ErrCode
 eRROR_NOT_FOUND = #const ERROR_NOT_FOUND
+
+foreign import ccall unsafe "CredReadW" c_CredRead :: LPCTSTR -> DWORD -> DWORD -> Ptr (Ptr CREDENTIAL) -> IO BOOL
+
+foreign import ccall unsafe "CredWriteW" c_CredWrite :: Ptr CREDENTIAL -> DWORD -> IO BOOL
+
+foreign import ccall unsafe "CredFree" c_CredFree :: Ptr CREDENTIAL -> IO ()
