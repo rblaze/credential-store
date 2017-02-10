@@ -7,9 +7,11 @@ import System.CredentialStore
 main :: IO ()
 main = do
     withCredentialStore $ \store -> do
-        putCredential store True "foo" (BS8.pack "burr")
-        v <- getCredential store "foo"
+--        putCredential store True "foo" (BS8.pack "burr")
+        v <- getCredential store "git:https://github.com"
         print v
-        deleteCredential store "foo"
-        v' <- getCredential store "foo"
-        print v'
+        v <- getCredential store "it:https://github.com"
+        print v
+--        deleteCredential store "foo"
+--        v' <- getCredential store "foo"
+--        print v'

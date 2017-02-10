@@ -78,3 +78,12 @@ instance Storable CREDENTIAL where
         userName           <- (#peek CREDENTIAL, UserName) buf
         return $ CREDENTIAL flags type' targetName comment lastWritten credentialBlobSize credentialBlob persist attributeCount attributes targetAlias userName
 
+cRED_TYPE_GENERIC :: DWORD
+cRED_TYPE_GENERIC = 1
+
+foreign import ccall unsafe "CredReadW" c_CredRead :: LPCTSTR -> DWORD -> DWORD -> Ptr (Ptr CREDENTIAL) -> IO BOOL
+
+foreign import ccall unsafe "CredFree" c_CredFree :: Ptr CREDENTIAL -> IO ()
+
+eRROR_NOT_FOUND :: ErrCode
+eRROR_NOT_FOUND = #const ERROR_NOT_FOUND
