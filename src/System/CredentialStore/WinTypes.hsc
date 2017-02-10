@@ -78,6 +78,8 @@ instance Storable CREDENTIAL where
         userName           <- (#peek CREDENTIAL, UserName) buf
         return $ CREDENTIAL flags type' targetName comment lastWritten credentialBlobSize credentialBlob persist attributeCount attributes targetAlias userName
 
+type CRED_PROTECTION_TYPE = DWORD
+
 cRED_TYPE_GENERIC :: DWORD
 cRED_TYPE_GENERIC = 1
 
@@ -87,6 +89,9 @@ cRED_PERSIST_LOCAL_MACHINE = 2
 eRROR_NOT_FOUND :: ErrCode
 eRROR_NOT_FOUND = #const ERROR_NOT_FOUND
 
+eRROR_INSUFFICIENT_BUFFER :: ErrCode
+eRROR_INSUFFICIENT_BUFFER = #const ERROR_INSUFFICIENT_BUFFER
+
 foreign import ccall unsafe "CredReadW" c_CredRead :: LPCTSTR -> DWORD -> DWORD -> Ptr (Ptr CREDENTIAL) -> IO BOOL
 
 foreign import ccall unsafe "CredWriteW" c_CredWrite :: Ptr CREDENTIAL -> DWORD -> IO BOOL
@@ -94,3 +99,7 @@ foreign import ccall unsafe "CredWriteW" c_CredWrite :: Ptr CREDENTIAL -> DWORD 
 foreign import ccall unsafe "CredDeleteW" c_CredDelete :: LPCTSTR -> DWORD -> DWORD -> IO BOOL
 
 foreign import ccall unsafe "CredFree" c_CredFree :: Ptr CREDENTIAL -> IO ()
+
+foreign import ccall unsafe "CredProtectW" c_CredProtect :: BOOL -> LPTSTR -> DWORD -> LPTSTR -> Ptr DWORD -> Ptr CRED_PROTECTION_TYPE -> IO BOOL
+
+foreign import ccall unsafe "CredUnprotectW" c_CredUnprotect :: BOOL -> LPTSTR -> DWORD -> LPTSTR -> Ptr DWORD -> IO BOOL
