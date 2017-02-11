@@ -11,15 +11,18 @@ import Control.Exception.Safe
 import Control.Monad
 import DBus
 import DBus.Client
+import Data.ByteArray
+import Foreign.Marshal
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Unsafe as BS
 import qualified Data.Map.Strict as M
-
-import System.CredentialStore.Types
 
 data CredentialStore = CredentialStore
     { csClient :: Client
     , csSession :: ObjectPath
     }
+
+type CredentialObject = (ObjectPath, BS.ByteString, BS.ByteString, String)
 
 noObject :: ObjectPath
 noObject = objectPath_ "/"
@@ -83,7 +86,7 @@ withCredentialStore = bracket openStore closeStore
 
     closeStore = disconnect . csClient
 
-getCredential :: CredentialStore -> String -> IO (Maybe Credential)
+getCredential :: ByteArray ba => CredentialStore -> String -> IO (Maybe ba)
 getCredential store@CredentialStore{..} name = do
     items <- findCredentials store name
     unlockReply <- call_ csClient $
@@ -99,11 +102,16 @@ getCredential store@CredentialStore{..} name = do
                 (serviceCall objpath itemInterface getSecret)
                     { methodCallBody = [ toVariant csSession ] }
             case methodReturnBody getReply of
-                [ obj ] | Just (_ :: ObjectPath, _ :: BS.ByteString, cred, _ :: String) <- fromVariant obj -> return $ Just cred
+                [ obj ] | Just co <- fromVariant obj ->
+                    Just <$> copyFromByteString (credData co)
                 body -> throw $ clientError $ "invalid GetSecret response" ++ show body
+  where
+    credData :: CredentialObject -> BS.ByteString
+    credData (_, _, v, _) = v
 
-putCredential :: CredentialStore -> Bool -> String -> Credential -> IO ()
+putCredential :: ByteArray ba => CredentialStore -> Bool -> String -> ba -> IO ()
 putCredential CredentialStore{..} replace name value = do
+    cred <- copyToByteString value
     reply <- call_ csClient $
         (serviceCall defaultCollection collectionInterface createItem)
         { methodCallBody =
@@ -115,7 +123,7 @@ putCredential CredentialStore{..} replace name value = do
             , toVariant
                 ( csSession
                 , BS.empty
-                , value
+                , cred
                 , "text/plain; charset=utf8" -- XXX who knows, really
                 )
             , toVariant replace
@@ -139,3 +147,13 @@ findCredentials CredentialStore{..} name = do
     case methodReturnBody searchReply of
         [ v ] | Just items <- fromVariant v -> return items
         body -> throw $ clientError $ "invalid SearchItems response" ++ show body
+
+copyFromByteString :: ByteArray ba => BS.ByteString -> IO ba
+copyFromByteString bs =
+    BS.unsafeUseAsCStringLen bs $ \(srcptr, len) ->
+        create len $ \dstptr ->
+            copyArray dstptr srcptr len
+
+copyToByteString :: ByteArrayAccess ba => ba -> IO BS.ByteString
+copyToByteString ba = withByteArray ba $ \ptr ->
+    BS.packCStringLen (ptr, Data.ByteArray.length ba)

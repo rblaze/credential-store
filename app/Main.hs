@@ -9,7 +9,7 @@ main =
     withCredentialStore $ \store -> do
         putCredential store True "foo" (BS8.pack "burr")
         v <- getCredential store "foo"
-        print v
+        print (v :: Maybe BS8.ByteString)
         deleteCredential store "foo"
         v' <- getCredential store "foo"
-        print v'
+        print (v' :: Maybe BS8.ByteString)
