@@ -103,7 +103,7 @@ getCredential store@CredentialStore{..} name = do
                     { methodCallBody = [ toVariant csSession ] }
             case methodReturnBody getReply of
                 [ obj ] | Just co <- fromVariant obj ->
-                    Just <$> copyFromByteString (credData co)
+                    fmap copyFromByteString (credData co)
                 body -> throw $ clientError $ "invalid GetSecret response" ++ show body
   where
     credData :: CredentialObject -> BS.ByteString
