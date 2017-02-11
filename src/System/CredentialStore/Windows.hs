@@ -12,7 +12,6 @@ import Data.ByteArray
 import Foreign
 import System.Win32.Time
 import System.Win32.Types
-import qualified Data.ByteString as BS
 
 import System.CredentialStore.WinTypes
 
