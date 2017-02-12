@@ -9,17 +9,25 @@ module System.CredentialStore.DBusSecretService
 
 import Control.Exception.Safe
 import Control.Monad
+import Crypto.Cipher.AES
+import Crypto.Cipher.Types
+import Crypto.Data.Padding
+import Crypto.Error
+import Crypto.Hash
+import Crypto.KDF.HKDF
+import Crypto.PubKey.DH
+import Crypto.Random
 import DBus
 import DBus.Client
+import Data.Bits
 import Data.ByteArray
-import Foreign.Marshal
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Unsafe as BS
 import qualified Data.Map.Strict as M
 
 data CredentialStore = CredentialStore
     { csClient :: Client
     , csSession :: ObjectPath
+    , csCipher :: AES128
     }
 
 type CredentialObject = (ObjectPath, BS.ByteString, BS.ByteString, String)
@@ -66,21 +74,43 @@ delete = memberName_ "Delete"
 serviceCall :: ObjectPath -> InterfaceName -> MemberName -> MethodCall
 serviceCall o i m = (methodCall o i m) { methodCallDestination = Just destination }
 
+dhPrime :: Integer
+dhPrime = 0xFFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE65381FFFFFFFFFFFFFFFF
+
+dhParams :: Params
+dhParams = Params
+    { params_p = dhPrime
+    , params_g = 2
+    , params_bits = 1024
+    }
+
 withCredentialStore :: (CredentialStore -> IO a) -> IO a
 withCredentialStore = bracket openStore closeStore
     where
-    openStore =
+    openStore = do
+        privateKey <- generatePrivate dhParams
+        let publicKey = calculatePublic dhParams privateKey
         bracketOnError connectSession disconnect $ \client -> do
             reply <- call_ client $
                 (serviceCall servicePath serviceInterface openSession)
-                { methodCallBody = [ toVariant "plain", toVariant $ toVariant "" ]
+                { methodCallBody = [ toVariant "dh-ietf1024-sha256-aes128-cbc-pkcs7", toVariant $ toVariant $ dumpKey publicKey ]
                 , methodCallAutoStart = True
                 }
             case methodReturnBody reply of
-                [_, objectPathVar] | Just v <- fromVariant objectPathVar ->
+                [serverKeyVar, objectPathVar]
+                    | Just v <- fromVariant objectPathVar
+                    , Just skv <- fromVariant serverKeyVar
+                    , Just keyDump <- fromVariant skv -> do
+                    let serverKey = readKey keyDump
+                    let SharedKey shared = getShared dhParams privateKey serverKey
+                    let salt = BS.replicate (hashDigestSize (undefined :: SHA256)) 0
+                    let prk = extract salt shared
+                    let sessionKey = expand (prk :: PRK SHA256) BS.empty (128 `div` 8)
+                    cipher <- throwCryptoErrorIO $ cipherInit (sessionKey :: ScrubbedBytes)
                     return CredentialStore
                         { csClient = client
                         , csSession = v
+                        , csCipher = cipher
                         }
                 body -> throw $ clientError $ "invalid OpenSession response" ++ show body
 
@@ -103,15 +133,16 @@ getCredential store@CredentialStore{..} name = do
                     { methodCallBody = [ toVariant csSession ] }
             case methodReturnBody getReply of
                 [ obj ] | Just co <- fromVariant obj ->
-                    fmap Just $ copyFromByteString (credData co)
+                    fmap Just $ decryptCredential csCipher (credParam co) (credData co)
                 body -> throw $ clientError $ "invalid GetSecret response" ++ show body
   where
     credData :: CredentialObject -> BS.ByteString
     credData (_, _, v, _) = v
+    credParam (_, p, _, _) = p
 
 putCredential :: ByteArray ba => CredentialStore -> Bool -> String -> ba -> IO ()
 putCredential CredentialStore{..} replace name value = do
-    cred <- copyToByteString value
+    (cred, iv) <- encryptCredential csCipher value
     reply <- call_ csClient $
         (serviceCall defaultCollection collectionInterface createItem)
         { methodCallBody =
@@ -122,7 +153,7 @@ putCredential CredentialStore{..} replace name value = do
                 ]
             , toVariant
                 ( csSession
-                , BS.empty
+                , iv
                 , cred
                 , "text/plain; charset=utf8" -- XXX who knows, really
                 )
@@ -148,12 +179,31 @@ findCredentials CredentialStore{..} name = do
         [ v ] | Just items <- fromVariant v -> return items
         body -> throw $ clientError $ "invalid SearchItems response" ++ show body
 
-copyFromByteString :: ByteArray ba => BS.ByteString -> IO ba
-copyFromByteString bs =
-    BS.unsafeUseAsCStringLen bs $ \(srcptr, len) ->
-        create len $ \dstptr ->
-            copyArray dstptr srcptr len
+decryptCredential :: (BlockCipher c, ByteArray ba) => c -> BS.ByteString -> BS.ByteString -> IO ba
+decryptCredential cipher ivbytes bs = do
+    iv <- case makeIV ivbytes of
+        Just iv -> return iv
+        Nothing -> throw $ clientError $ "invalid credential IV"
+    let decrypted = cbcDecrypt cipher iv $ convert bs
+    case unpad (PKCS7 $ blockSize cipher) decrypted of
+        Nothing -> throw $ clientError $ "invalid decrypred credential"
+        Just cred -> return cred
 
-copyToByteString :: ByteArrayAccess ba => ba -> IO BS.ByteString
-copyToByteString ba = withByteArray ba $ \ptr ->
-    BS.packCStringLen (ptr, Data.ByteArray.length ba)
+encryptCredential :: (BlockCipher c, ByteArray ba) => c -> ba -> IO (BS.ByteString, BS.ByteString)
+encryptCredential cipher ba = do
+    let padded = pad (PKCS7 $ blockSize cipher) ba
+    ivbytes <- getRandomBytes (blockSize cipher)
+    let Just iv = makeIV ivbytes
+    let encrypted = cbcEncrypt cipher iv padded
+    return (convert encrypted, ivbytes)
+
+dumpKey :: PublicNumber -> BS.ByteString
+dumpKey (PublicNumber key) = BS.reverse $ BS.unfoldr step key
+  where
+    step 0 = Nothing
+    step i = Just (fromIntegral i, i `shiftR` 8)
+
+readKey :: BS.ByteString -> PublicNumber
+readKey = PublicNumber . BS.foldl' step 0
+  where
+    step i b = i `shiftL` 8 .|. fromIntegral b
