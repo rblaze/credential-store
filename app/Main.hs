@@ -7,7 +7,7 @@ import System.CredentialStore
 main :: IO ()
 main =
     withCredentialStore $ \store -> do
-        putCredential store True "foo" (BS8.pack "burr")
+        putCredential store "foo" (BS8.pack "burr")
         v <- getCredential store "foo"
         print (v :: Maybe BS8.ByteString)
         deleteCredential store "foo"

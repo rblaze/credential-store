@@ -39,8 +39,8 @@ getCredential _ name =
                 unless (errCode == eRROR_NOT_FOUND) $ failWith "CredRead" errCode
                 return Nothing
 
-putCredential :: ByteArrayAccess ba => CredentialStore -> Bool -> String -> ba -> IO ()
-putCredential _ _ name value =
+putCredential :: ByteArrayAccess ba => CredentialStore -> String -> ba -> IO ()
+putCredential _ name value =
     withEncryptedCredential value $ \(val, len) ->
     withTString name $ \tstr ->
     withTString "" $ \emptystr ->

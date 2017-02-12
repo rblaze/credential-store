@@ -24,6 +24,7 @@ import Data.ByteArray
 import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as M
 
+-- |Abstract context for credential store communications
 data CredentialStore = CredentialStore
     { csClient :: Client
     , csSession :: ObjectPath
@@ -84,6 +85,8 @@ dhParams = Params
     , params_bits = 1024
     }
 
+-- |Open credential store and execute function passing it as parameter.
+-- Store is closed even in presence of exceptions
 withCredentialStore :: (CredentialStore -> IO a) -> IO a
 withCredentialStore = bracket openStore closeStore
     where
@@ -116,6 +119,7 @@ withCredentialStore = bracket openStore closeStore
 
     closeStore = disconnect . csClient
 
+-- |Read named credential from store
 getCredential :: ByteArray ba => CredentialStore -> String -> IO (Maybe ba)
 getCredential store@CredentialStore{..} name = do
     items <- findCredentials store name
@@ -140,8 +144,9 @@ getCredential store@CredentialStore{..} name = do
     credData (_, _, v, _) = v
     credParam (_, p, _, _) = p
 
-putCredential :: ByteArray ba => CredentialStore -> Bool -> String -> ba -> IO ()
-putCredential CredentialStore{..} replace name value = do
+-- |Write named credential to store, overwriting existing one
+putCredential :: ByteArray ba => CredentialStore -> String -> ba -> IO ()
+putCredential CredentialStore{..} name value = do
     (cred, iv) <- encryptCredential csCipher value
     reply <- call_ csClient $
         (serviceCall defaultCollection collectionInterface createItem)
@@ -157,13 +162,14 @@ putCredential CredentialStore{..} replace name value = do
                 , cred
                 , "text/plain; charset=utf8" -- XXX who knows, really
                 )
-            , toVariant replace
+            , toVariant True
             ]
         }
     case methodReturnBody reply of
         [ path, _ ] | Just p <- fromVariant path -> when (p == noObject) $ throw (clientError "prompt required")
         body -> throw $ clientError $ "invalid CreateItem response" ++ show body
 
+-- |Delete named credential from store
 deleteCredential :: CredentialStore -> String -> IO ()
 deleteCredential store@CredentialStore{..} name = do
     items <- findCredentials store name
