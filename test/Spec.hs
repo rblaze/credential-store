@@ -14,12 +14,12 @@ tests = testGroup "Credential store"
 
 testCred :: Assertion
 testCred = withCredentialStore $ \store -> do
-    putCredential store True credentialName credentialValue
+    putCredential store credentialName credentialValue
     v <- getCredential store credentialName
     assertEqual "value don't match" (Just credentialValue) v
     deleteCredential store credentialName
     v' <- getCredential store credentialName
-    assertEqual "value not deleted" Nothing v'
+    assertEqual "value not deleted" Nothing (v' :: Maybe BS8.ByteString)
     where
     credentialName = "credential-store-test"
     credentialValue = BS8.pack "foobar"
