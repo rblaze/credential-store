@@ -15,11 +15,11 @@ import Crypto.Data.Padding
 import Crypto.Error
 import Crypto.Hash
 import Crypto.KDF.HKDF
+import Crypto.Number.Serialize
 import Crypto.PubKey.DH
 import Crypto.Random
 import DBus
 import DBus.Client
-import Data.Bits
 import Data.ByteArray
 import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as M
@@ -204,12 +204,7 @@ encryptCredential cipher ba = do
     return (convert encrypted, ivbytes)
 
 dumpKey :: PublicNumber -> BS.ByteString
-dumpKey (PublicNumber key) = BS.reverse $ BS.unfoldr step key
-  where
-    step 0 = Nothing
-    step i = Just (fromIntegral i, i `shiftR` 8)
+dumpKey (PublicNumber key) = i2osp key
 
 readKey :: BS.ByteString -> PublicNumber
-readKey = PublicNumber . BS.foldl' step 0
-  where
-    step i b = i `shiftL` 8 .|. fromIntegral b
+readKey = PublicNumber . os2ip
