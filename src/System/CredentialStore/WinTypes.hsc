@@ -89,9 +89,6 @@ cRED_PERSIST_LOCAL_MACHINE = 2
 eRROR_NOT_FOUND :: ErrCode
 eRROR_NOT_FOUND = #const ERROR_NOT_FOUND
 
-eRROR_INSUFFICIENT_BUFFER :: ErrCode
-eRROR_INSUFFICIENT_BUFFER = #const ERROR_INSUFFICIENT_BUFFER
-
 foreign import ccall unsafe "CredReadW" c_CredRead :: LPCTSTR -> DWORD -> DWORD -> Ptr (Ptr CREDENTIAL) -> IO BOOL
 
 foreign import ccall unsafe "CredWriteW" c_CredWrite :: Ptr CREDENTIAL -> DWORD -> IO BOOL
