@@ -2,14 +2,14 @@
 {-|
 Cross-platform library to access system-specific credential store.
 
-Uses Windows CredRead/CredWrite/CredDelete API on Windows,
+Uses Windows CredRead\/CredWrite\/CredDelete API on Windows,
 DBus Secret Store API with gnome-keyring or kwallet as backends on Unix.
 MacOS is not supported yet.
 
 Example usage:
 
 @
-withCredentialStore $ \store -> do
+withCredentialStore $ \\store -> do
     putCredential store credentialName credentialValue
     v <- getCredential store credentialName
     deleteCredential store credentialName
